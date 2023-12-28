@@ -1,0 +1,42 @@
+import pandas as pd
+from surprise import Dataset, Reader, SVD
+from surprise.model_selection import train_test_split
+from surprise import accuracy
+
+# Load the MovieLens dataset (replace 'ratings.csv' with your actual file)
+data = pd.read_csv('ratings.csv')
+reader = Reader(line_format='user item rating timestamp', sep=',', rating_scale=(1, 5))
+dataset = Dataset.load_from_df(data[['userId', 'movieId', 'rating']], reader)
+
+# Split the data into training and testing sets
+trainset, testset = train_test_split(dataset, test_size=0.2, random_state=42)
+
+# Build the collaborative filtering model (SVD)
+model = SVD()
+model.fit(trainset)
+
+# Make predictions on the test set
+predictions = model.test(testset)
+
+# Evaluate the model
+accuracy.rmse(predictions)
+
+# Function to get movie recommendations for a given user
+def get_movie_recommendations(user_id, n=5):
+    movies_watched_by_user = data[data['userId'] == user_id]
+    movies_not_watched = data[~data['movieId'].isin(movies_watched_by_user['movieId'])]['movieId'].unique()
+    
+    predictions = [model.predict(user_id, movie_id) for movie_id in movies_not_watched]
+    recommendations = pd.DataFrame(predictions, columns=['userId', 'movieId', 'rating_pred', 'timestamp']).sort_values('rating_pred', ascending=False)
+    
+    top_n_recommendations = recommendations.head(n)
+    movie_titles = pd.read_csv('movies.csv')  # Replace 'movies.csv' with your actual file containing movie titles
+    top_n_recommendations = top_n_recommendations.merge(movie_titles, on='movieId')
+    
+    return top_n_recommendations[['movieId', 'title', 'rating_pred']]
+
+# Example: Get movie recommendations for user with userId=1
+user_id_to_recommend = 1
+recommendations = get_movie_recommendations(user_id_to_recommend)
+print(f"Top 5 movie recommendations for User {user_id_to_recommend}:\n")
+print(recommendations)
